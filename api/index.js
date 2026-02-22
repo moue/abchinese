@@ -1,5 +1,4 @@
 const { put, list, get } = require('@vercel/blob');
-  console.log('Vercel environment check. Token available:', !!process.env.BLOB_READ_WRITE_TOKEN, 'Request mode:', req.body.mode);
 const GMI_KEY = process.env.GMI_API_KEY || '';
 const LLM_MODEL = process.env.LLM_MODEL || 'openai/gpt-4o-mini';
 const API_TIMEOUT = 15000; // 15 seconds
@@ -115,6 +114,7 @@ async function fetchTts(text) {
 }
 
 module.exports = async function handler(req, res) {
+  console.log('Vercel environment check. Token available:', !!process.env.BLOB_READ_WRITE_TOKEN, 'Request mode:', req.body.mode);
   if (req.method !== 'POST') {
     res.status(405).json({ ok: false, error: 'Method not allowed' });
     return;
