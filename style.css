@@ -19,6 +19,7 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background: var(--bg);
     color: var(--text);
+    padding-top: 1rem;
 }
 
 main {
@@ -289,11 +290,14 @@ textarea::placeholder {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: .35rem
+    gap: .25rem
 }
 
-.header-actions .btn-share {
-    width: 84px;
+.header-action-btn {
+    width: 72px;
+    padding: .22rem .5rem;
+    font-size: .66rem;
+    line-height: 1.2;
     text-align: center
 }
 
@@ -716,6 +720,12 @@ textarea::placeholder {
     .btn-share {
         font-size: .7rem;
         padding: .3rem .75rem
+    }
+
+    .header-action-btn {
+        width: 72px;
+        padding: .22rem .5rem;
+        font-size: .66rem
     }
 
     .btn-play {
