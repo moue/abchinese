@@ -114,7 +114,6 @@ async function fetchTts(text) {
 }
 
 module.exports = async function handler(req, res) {
-  console.log('Vercel environment check. Token available:', !!process.env.BLOB_READ_WRITE_TOKEN, 'Request mode:', req.body.mode);
   if (req.method !== 'POST') {
     res.status(405).json({ ok: false, error: 'Method not allowed' });
     return;
@@ -129,7 +128,12 @@ module.exports = async function handler(req, res) {
     }
 
     if (mode === 'share-save') {
-      const data = { text: input, pinyin: req.body?.pinyin || null, words: req.body?.words || null };
+      const data = {
+        text: input,
+        pinyin: req.body?.pinyin || null,
+        words: req.body?.words || null,
+        audioBase64: req.body?.audioBase64 || null,
+      };
       const id = Math.random().toString(36).slice(2, 8);
       try {
         const blob = await put('shares/' + id + '.json', JSON.stringify(data), {

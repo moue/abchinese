@@ -7,6 +7,11 @@
     var tryAgainBtn = document.getElementById('tryAgain');
     var clearResultsBtn = document.getElementById('clearResults');
     var shareBtnEl = document.getElementById('shareBtn');
+    var rootEl = document.documentElement;
+    var shareLinkWrapEl = document.getElementById('shareLinkWrap');
+    var shareLinkInputEl = document.getElementById('shareLinkInput');
+    var copyShareLinkBtnEl = document.getElementById('copyShareLink');
+    var shareLinkStatusEl = document.getElementById('shareLinkStatus');
 
     var CACHE_PREFIX = 'readforme:';
     var TOKEN_LIMIT = 50000;
@@ -14,6 +19,13 @@
     var USER_KEY_KEY = 'readforme:userApiKey';
     var lastPayload = null;
     var currentAudio = null;
+
+    function setActionsVisibility(showActions, showTryAgain) {
+        actionsEl.style.display = showActions ? 'flex' : 'none';
+        if (tryAgainBtn) {
+            tryAgainBtn.style.display = showActions ? '' : 'none';
+        }
+    }
 
     function getUserKey() {
         return localStorage.getItem(USER_KEY_KEY) || '';
@@ -140,10 +152,73 @@
         errorsEl.style.display = 'block';
     }
 
+    function copyTextToClipboard(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+            return navigator.clipboard.writeText(text).then(function () { return true; }).catch(function () { return false; });
+        }
+        return new Promise(function (resolve) {
+            var textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.setAttribute('readonly', '');
+            textArea.style.position = 'fixed';
+            textArea.style.top = 0;
+            textArea.style.left = 0;
+            textArea.style.opacity = 0;
+            textArea.style.fontSize = '16px'; // Prevent iOS Safari zoom while selecting.
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            textArea.setSelectionRange(0, textArea.value.length);
+            var copied = false;
+            try {
+                copied = document.execCommand('copy');
+            } catch (e) {
+                copied = false;
+            }
+            document.body.removeChild(textArea);
+            resolve(copied);
+        });
+    }
+
+    function setShareLink(url) {
+        if (!shareLinkWrapEl || !shareLinkInputEl || !shareLinkStatusEl) return;
+        if (!url) {
+            shareLinkInputEl.value = '';
+            shareLinkStatusEl.textContent = '';
+            shareLinkWrapEl.style.display = 'none';
+            return;
+        }
+        shareLinkInputEl.value = url;
+        shareLinkStatusEl.textContent = '';
+        shareLinkWrapEl.style.display = 'block';
+    }
+
+    if (copyShareLinkBtnEl) {
+        copyShareLinkBtnEl.onclick = function () {
+            if (!shareLinkInputEl || !shareLinkInputEl.value) return;
+            copyTextToClipboard(shareLinkInputEl.value).then(function (copied) {
+                setShareLink(shareLinkInputEl.value);
+            });
+        };
+    }
+
+    if (shareLinkInputEl) {
+        shareLinkInputEl.onclick = function () {
+            shareLinkInputEl.focus();
+            shareLinkInputEl.select();
+            shareLinkInputEl.setSelectionRange(0, shareLinkInputEl.value.length);
+        };
+    }
+
     function render(payload) {
         stopLoading();
         resultsEl.innerHTML = '';
-        lastPayload = payload;
+        setShareLink('');
+        setActionsVisibility(true, false);
+        // Only cache valid payloads
+        if (payload && typeof payload.text === 'string' && Array.isArray(payload.words)) {
+            lastPayload = payload;
+        }
 
         var resultCard = document.createElement('div');
         resultCard.className = 'result-card';
@@ -167,36 +242,50 @@
             btn.className = 'btn-play';
             btn.textContent = '\uD83D\uDD0A Play';
             btn.setAttribute('aria-label', 'Play speech');
-            var playing = false;
+
+            function resetToPlayState() {
+                btn.textContent = '\uD83D\uDD0A Play';
+                btn.className = 'btn-play';
+            }
+
+            // Create audio object early if it doesn't exist or has changed
+            if (!currentAudio || !currentAudio.src.endsWith(payload.audioBase64)) {
+                if (currentAudio) {
+                    currentAudio.pause(); // Stop any previous audio
+                }
+                currentAudio = new Audio('data:audio/mpeg;base64,' + payload.audioBase64);
+            } else if (!currentAudio.paused) {
+                // If re-rendering while the correct audio is already playing, stop it and reset button for the new render
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+            }
+            // Always bind ended handler to the currently rendered button instance.
+            currentAudio.onended = resetToPlayState;
+
+            // Simplified click handler
             btn.onclick = function () {
-                if (playing) {
-                    if (currentAudio) {
-                        currentAudio.pause();
-                        currentAudio.currentTime = 0;
-                        currentAudio = null;
-                    }
-                    btn.textContent = '\uD83D\uDD0A Play';
-                    btn.className = 'btn-play';
-                    playing = false;
-                } else {
-                    if (currentAudio) {
-                        currentAudio.pause();
-                        currentAudio.currentTime = 0;
-                    }
-                    currentAudio = new Audio('data:audio/mp3;base64,' + payload.audioBase64);
+                if (currentAudio.paused) {
                     currentAudio.play();
                     btn.textContent = '\u23F9 Stop';
                     btn.className = 'btn-stop';
-                    playing = true;
-                    currentAudio.onended = function () {
-                        btn.textContent = '\uD83D\uDD0A Play';
-                        btn.className = 'btn-play';
-                        playing = false;
-                    };
+                } else {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0; // Reset on stop
+                    resetToPlayState();
                 }
             };
             audioBtnContainer.appendChild(btn);
             resultCard.appendChild(audioBtnContainer);
+        } else if (payload.showAudioPlaceholder) {
+            var audioPlaceholderContainer = document.createElement('span');
+            var placeholderBtn = document.createElement('button');
+            placeholderBtn.type = 'button';
+            placeholderBtn.className = 'btn-play';
+            placeholderBtn.textContent = '\uD83D\uDD0A Audio\u2026';
+            placeholderBtn.disabled = true;
+            placeholderBtn.style.opacity = '0.6';
+            audioPlaceholderContainer.appendChild(placeholderBtn);
+            resultCard.appendChild(audioPlaceholderContainer);
         }
         resultsEl.appendChild(resultCard);
 
@@ -236,12 +325,12 @@
             resultsEl.appendChild(wordsCardEl);
         }
 
-        actionsEl.style.display = 'flex';
         shareBtnEl.style.display = '';
         shareBtnEl.textContent = 'Share';
         shareBtnEl.onclick = function () {
             if (!lastPayload) return;
             shareBtnEl.textContent = 'Saving…';
+            shareBtnEl.disabled = true;
             fetch('/api', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -249,21 +338,32 @@
             }).then(function (r) { return r.json(); })
                 .then(function (data) {
                     if (data.ok && data.id) {
-                        var url = window.location.origin + '?s=' + data.id;
-                        navigator.clipboard.writeText(url).then(function () {
-                            shareBtnEl.textContent = 'Share link copied!';
-                            setTimeout(function () { shareBtnEl.textContent = 'Share'; }, 1500);
-                        }).catch(function () {
-                            shareBtnEl.textContent = 'Error';
-                            setTimeout(function () { shareBtnEl.textContent = 'Share'; }, 1500);
+                        var url = window.location.origin + '/s/' + data.id;
+                        setShareLink(url);
+                        if (shareLinkWrapEl) {
+                            shareLinkWrapEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        }
+                        return copyTextToClipboard(url).then(function (copied) {
+                            shareBtnEl.textContent = 'Share';
+                            setShareLink(url);
+                            if (shareLinkInputEl) {
+                                shareLinkInputEl.focus();
+                                shareLinkInputEl.select();
+                                shareLinkInputEl.setSelectionRange(0, shareLinkInputEl.value.length);
+                            }
                         });
                     } else {
+                        showError(data.error || 'Could not save share');
                         shareBtnEl.textContent = 'Error';
-                        setTimeout(function () { shareBtnEl.textContent = 'Share'; }, 1500);
                     }
                 }).catch(function () {
+                    showError('Could not save share');
                     shareBtnEl.textContent = 'Error';
-                    setTimeout(function () { shareBtnEl.textContent = 'Share'; }, 1500);
+                }).finally(function () {
+                    setTimeout(function () {
+                        shareBtnEl.textContent = 'Share';
+                        shareBtnEl.disabled = false;
+                    }, 2000);
                 });
         };
     }
@@ -272,36 +372,57 @@
         text = (text || '').trim();
         if (!text) {
             showError('Please paste some text.');
+            setActionsVisibility(false, false);
             return;
         }
         if (!/[\u4e00-\u9fff]/.test(text)) {
             showError('Hmm, that doesn\'t look like Chinese!');
+            setActionsVisibility(false, false);
+            return;
+        }
+
+        // Restore caching
+        if (lastPayload && lastPayload.text === text) {
+            render(lastPayload);
             return;
         }
 
         var cached = getCached(text);
         if (cached && (cached.pinyin !== undefined || cached.text) && cached.words) {
             showError('');
-            render({ text: text, pinyin: cached.pinyin, words: cached.words, audioBase64: null, usage: null, cached: true });
-            // Fetch audio in background
-            apiCall(text, 'tts').then(function (res) {
-                if (res.audioBase64) { 
-                    lastPayload.audioBase64 = res.audioBase64;
-                    setCached(text, lastPayload);
-                    // Re-render to show play button
-                    render(lastPayload);
-                }
-            }).catch(function () { });
+            var cachedPayload = {
+                text: text,
+                pinyin: cached.pinyin,
+                words: cached.words,
+                audioBase64: cached.audioBase64 || null,
+                usage: null,
+                cached: true
+            };
+            render(cachedPayload);
+
+            // Fetch audio only if this cache entry does not already have it.
+            if (!cachedPayload.audioBase64) {
+                apiCall(text, 'tts').then(function (res) {
+                    if (res.audioBase64) {
+                        lastPayload.audioBase64 = res.audioBase64;
+                        setCached(text, lastPayload);
+                        // Re-render to show play button
+                        render(lastPayload);
+                    }
+                }).catch(function () { });
+            }
             return;
         }
 
         var userKey = getUserKey();
         if (!userKey && isOverLimit()) {
             showError('limit');
+            setActionsVisibility(true, true);
             return;
         }
 
         showError('');
+        setActionsVisibility(false, false);
         startLoading();
 
         var pinyinPromise, wordsPromise;
@@ -360,6 +481,7 @@
         }).catch(function (err) {
             stopLoading();
             showError(err.message || 'An API error occurred. Please try again.');
+            setActionsVisibility(true, true);
         });
     }
 
@@ -389,20 +511,26 @@
         run(textEl.value);
     };
 
-    tryAgainBtn.onclick = function () {
-        if (lastPayload) {
-            run(lastPayload.text);
-        } else {
-            run(textEl.value);
-        }
-    };
+    if (tryAgainBtn) {
+        tryAgainBtn.onclick = function () {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (lastPayload && lastPayload.text) {
+                run(lastPayload.text);
+            } else {
+                run(textEl.value);
+            }
+        };
+    }
 
     clearResultsBtn.onclick = function () {
         lastPayload = null;
         errorsEl.textContent = '';
         errorsEl.style.display = 'none';
         resultsEl.innerHTML = '';
-        actionsEl.style.display = 'none';
+        textEl.value = '';
+        textEl.dispatchEvent(new Event('input'));
+        setShareLink('');
+        setActionsVisibility(false, false);
         shareBtnEl.style.display = 'none';
     };
 
@@ -424,10 +552,9 @@
     }
 
     // Auto-submit from shared link
-    var params = new URLSearchParams(window.location.search);
-    var shareId = params.get('s');
+    var shareMatch = window.location.pathname.match(/^\/s\/([a-z0-9]+)$/i);
+    var shareId = shareMatch ? shareMatch[1] : '';
     if (shareId) {
-        window.history.replaceState({}, '', window.location.pathname);
         startLoading();
         fetch('/api', {
             method: 'POST',
@@ -438,24 +565,44 @@
                 textEl.value = data.text;
                 textEl.dispatchEvent(new Event('input'));
                 showError('');
-                var payload = { text: data.text, pinyin: data.pinyin, words: data.words, audioBase64: null, usage: null, cached: true };
+                var payload = {
+                    text: data.text,
+                    pinyin: data.pinyin,
+                    words: data.words,
+                    audioBase64: data.audioBase64 || null,
+                    showAudioPlaceholder: !data.audioBase64,
+                    usage: null,
+                    cached: true
+                };
+
                 render(payload);
-                // Fetch audio in background
-                apiCall(data.text, 'tts').then(function (res) {
-                    if (res.audioBase64) {
-                        lastPayload.audioBase64 = res.audioBase64;
-                        render(lastPayload);
-                    }
-                }).catch(function () { });
+                if (!payload.audioBase64) {
+                    apiCall(data.text, 'tts').then(function (res) {
+                        if (res.audioBase64) {
+                            payload.audioBase64 = res.audioBase64;
+                            payload.showAudioPlaceholder = false;
+                            if (lastPayload && lastPayload.text === payload.text) {
+                                lastPayload.audioBase64 = res.audioBase64;
+                                lastPayload.showAudioPlaceholder = false;
+                            }
+                            render(payload);
+                        }
+                    }).catch(function () { });
+                }
             } else {
                 stopLoading();
                 showError('Share link expired or not found');
+                setActionsVisibility(true, true);
             }
         }).catch(function () {
             stopLoading();
             showError('Could not load shared result');
+            setActionsVisibility(true, true);
+        }).finally(function () {
+            rootEl.classList.remove('share-loading');
         });
     }
 
+    setActionsVisibility(false, false);
     getLoadingMessages();
 })();

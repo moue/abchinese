@@ -4,10 +4,39 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Read for me</title>
+    <script>
+        if (/^\/s\/[a-z0-9]+$/i.test(window.location.pathname)) {
+            document.documentElement.classList.add('share-loading');
+        }
+    </script>
     <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+<div id="shareBoot" class="share-boot" aria-hidden="true">
+    <div class="share-boot-shell">
+        <div class="skeleton skeleton-title"></div>
+        <div class="skeleton skeleton-subtitle"></div>
+        <div class="share-boot-card">
+            <div class="skeleton skeleton-line-lg"></div>
+            <div class="skeleton skeleton-line-sm"></div>
+            <div class="skeleton skeleton-pill"></div>
+        </div>
+        <div class="share-boot-card">
+            <div class="skeleton skeleton-line-sm"></div>
+            <div class="skeleton skeleton-line-md"></div>
+            <div class="skeleton skeleton-line-xs"></div>
+        </div>
+    </div>
+</div>
 <main>
+    <div id="shareLinkWrap" class="share-link-wrap" style="display:none">
+        <p class="share-link-label">Share link</p>
+        <div class="share-link-row">
+            <input type="text" id="shareLinkInput" class="share-link-input" readonly aria-label="Share link">
+            <button type="button" id="copyShareLink" class="btn btn-secondary btn-small">Copy</button>
+        </div>
+        <p id="shareLinkStatus" class="share-link-status"></p>
+    </div>
     <div class="header">
         <h1>Read for me</h1>
         <button type="button" id="shareBtn" class="btn-share" style="display:none">Share</button>
@@ -19,8 +48,8 @@
             <textarea id="text" name="text" rows="5" placeholder="Paste Chinese text here…"></textarea>
             <div class="form-footer">
                 <div class="form-buttons">
+                    <button type="submit" class="btn btn-primary">Go!</button>
                     <button type="button" id="tryExample" class="btn btn-example">Try an example</button>
-                    <button type="submit" class="btn btn-primary">Read</button>
                 </div>
                 <span class="char-count" id="charCount">0 characters</span>
             </div>

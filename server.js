@@ -43,6 +43,11 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET') {
     const rawPath = req.url.split('?')[0];
+    if (/^\/s\/[a-z0-9]+$/i.test(rawPath)) {
+      res.writeHead(200, { 'Content-Type': MIME_TYPES['.html'] });
+      res.end(fs.readFileSync(path.join(__dirname, 'index.html')));
+      return;
+    }
     const urlPath = rawPath === '/' ? '/index.html' : rawPath;
     const filePath = path.join(__dirname, urlPath);
     const ext = path.extname(filePath);
