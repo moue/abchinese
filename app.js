@@ -127,17 +127,25 @@
 
     function showError(msg) {
         stopLoading();
+        // If we're surfacing an error, clear stale loading content.
+        if (msg) {
+            resultsEl.innerHTML = '';
+        }
         errorsEl.innerHTML = '';
         if (!msg) {
             errorsEl.style.display = 'none';
             return;
         }
-        if (msg === 'limit' || /API\s*(key|unavailable|4[0-9]{2})|Pinyin API/i.test(msg)) {
-            errorsEl.innerHTML = '\uD83E\uDD7A Looks like Yuqi ran out of API credits! Get your own key at <a href="https://console.gmicloud.ai?utm_source=yuqi" target="_blank" rel="noopener">console.gmicloud.ai</a> or <a href="https://ko-fi.com/alwaysyuqs" target="_blank" rel="noopener">buy her a coffee</a> to keep this running'
+        if (msg === 'limit' || /Pinyin API/i.test(msg) || /Invalid key/i.test(msg)) {
+            var invalidKeyNote = (msg && /Invalid key/i.test(msg))
+                ? '<p class="key-inline-error">Invalid key, try again.</p>'
+                : '';
+            errorsEl.innerHTML = '\uD83E\uDD7A Looks like Yuqi ran out of API credits! Get your own key at <a class="plain-link" href="https://console.gmicloud.ai?utm_source=yuqi" target="_blank" rel="noopener">console.gmicloud.ai</a> or <a class="plain-link" href="https://ko-fi.com/alwaysyuqs" target="_blank" rel="noopener">buy her a coffee</a> to keep this running'
                 + '<div class="key-form">'
                 + '<input type="text" id="userKeyInput" placeholder="Paste your GMI API key" class="key-input" value="' + (getUserKey() || '') + '">'
                 + '<button type="button" id="saveKeyBtn" class="btn btn-primary btn-small">Save key</button>'
-                + '</div>';
+                + '</div>'
+                + invalidKeyNote;
             var saveBtn = document.getElementById('saveKeyBtn');
             saveBtn.onclick = function () {
                 var val = document.getElementById('userKeyInput').value.trim();
@@ -495,7 +503,28 @@
                 temperature: 0,
                 max_tokens: maxTokens || 2000
             })
-        }).then(function (r) { return r.json(); });
+        }).then(function (r) {
+            return r.json().then(function (data) {
+                if (!r.ok) {
+                    var errMsg = (data && data.error && (data.error.message || data.error.code)) || ('GMI API error ' + r.status);
+                    if (r.status === 401 || r.status === 403) {
+                        throw new Error('Invalid key. Please check your API key and try again.');
+                    }
+                    throw new Error(errMsg);
+                }
+                if (data && data.error) {
+                    var msg = data.error.message || data.error.code || 'GMI API error';
+                    throw new Error(msg);
+                }
+                if (!data || !Array.isArray(data.choices) || !data.choices[0] || !data.choices[0].message) {
+                    throw new Error('Invalid key. Please check your API key and try again.');
+                }
+                return data;
+            }).catch(function (e) {
+                if (e && e.message) throw e;
+                throw new Error('Could not read API response.');
+            });
+        });
     }
 
     function apiCall(text, mode) {
